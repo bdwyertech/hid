@@ -52,7 +52,7 @@ import "C"
 
 import (
 	"errors"
-	"runtime"
+	"fmt"
 	"sync"
 	"unsafe"
 )
@@ -170,15 +170,19 @@ func (dev *Device) Write(b []byte) (int, error) {
 	if device == nil {
 		return 0, ErrDeviceClosed
 	}
-	// Prepend a HID report ID on Windows, other OSes don't need it
-	var report []byte
-	if runtime.GOOS == "windows" {
-		report = append([]byte{0x00}, b...)
-	} else {
-		report = b
+
+	switch l := len(b); l {
+	case 64:
+		// Prepend a report if missing
+		b = append([]byte{0x00}, b...)
+	case 65:
+		break
+	default:
+		return 0, fmt.Errorf("hidapi: invalid byte length: %d", l)
 	}
+
 	// Execute the write operation
-	written := int(C.hid_write(device, (*C.uchar)(&report[0]), C.size_t(len(report))))
+	written := int(C.hid_write(device, (*C.uchar)(&b[0]), C.size_t(65)))
 	if written == -1 {
 		// If the write failed, verify if closed or other error
 		dev.lock.Lock()
